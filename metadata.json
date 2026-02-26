@@ -1,0 +1,5 @@
+{
+  "name": "ScamShield AI",
+  "description": "ScamShield AI helps you detect scams, phishing links, fake vendors, and crypto fraud instantly. Paste a link, wallet address, or contract to get a real-time risk score and protect your money before you pay.",
+  "requestFramePermissions": []
+}
