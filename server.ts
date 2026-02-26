@@ -128,9 +128,6 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
-    }
-  }));
-
   // Auth Routes
   app.post("/api/auth/verify", (req, res) => {
     const { email, passcode, referralCode } = req.body;
