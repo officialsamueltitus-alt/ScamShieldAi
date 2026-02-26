@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "npm install typescript && tsc --outDir dist --esModuleInterop --module node16 --target es2017 --moduleResolution node --skipLibCheck server.ts && vite build",
+    "build": "npm install typescript && tsc --outDir dist --esModuleInterop --module node16 --target es2017 --skipLibCheck server.ts && vite build",
     "start": "node dist/server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",
