@@ -13,9 +13,8 @@ export interface AnalysisResult {
 }
 
 export async function analyzeInput(type: string, content: string, imageData?: string): Promise<AnalysisResult> {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-2.0-flash";
   
-  // Fetch local context first
   let localContext = "";
   try {
     const localRes = await fetch(`/api/verify/local?query=${encodeURIComponent(content.slice(0, 100))}`);
