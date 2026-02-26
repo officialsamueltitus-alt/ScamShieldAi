@@ -95,7 +95,7 @@ function generateReferralCode() {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 async function configureApp() {
   app.use(express.json({
