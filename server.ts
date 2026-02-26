@@ -449,6 +449,30 @@ async function configureApp() {
     res.json({ id: info.lastInsertRowid });
   });
 
+  app.get("/api/verify/local", (req, res) => {
+    const { query } = req.query;
+    if (!query) return res.json([]);
+    
+    const searchStr = `%${query}%`;
+    try {
+      const localMatches = db.prepare(`
+        SELECT title as name, description as details, scam_type as type, created_at 
+        FROM community_reports 
+        WHERE title LIKE ? OR description LIKE ?
+        UNION
+        SELECT 'Previous Analysis' as name, explanation as details, type as type, created_at
+        FROM reports
+        WHERE content LIKE ? OR explanation LIKE ?
+        LIMIT 5
+      `).all(searchStr, searchStr, searchStr, searchStr);
+      
+      res.json(localMatches);
+    } catch (e) {
+      console.error("Local verify error:", e);
+      res.json([]);
+    }
+  });
+
   app.get("/api/stats", (req, res) => {
     const totalChecks = db.prepare("SELECT COUNT(*) as count FROM reports").get() as { count: number };
     const highRisk = db.prepare("SELECT COUNT(*) as count FROM reports WHERE risk_level = 'High'").get() as { count: number };
