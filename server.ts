@@ -8,6 +8,7 @@ process.on('unhandledRejection', (err) => {
   process.exit(1);
 });
 
+import connectPgSimple from "connect-pg-simple";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -109,15 +110,24 @@ async function configureApp() {
     }
   }));
   app.use(cookieParser());
-  app.use(session({
-    secret: process.env.SESSION_SECRET || "scamshield-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false,
-      sameSite: "lax",
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000
+
+const PgSession = connectPgSimple(session);
+
+app.use(session({
+  store: new PgSession({
+    pool: pool,
+    tableName: 'session'
+  }),
+  secret: process.env.SESSION_SECRET || "scamshield-secret",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false,
+    sameSite: "lax",
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
     }
   }));
 
