@@ -595,9 +595,9 @@ async function configureApp() {
 
   if (process.env.NODE_ENV !== "production" || process.env.VITE_DEV_SERVER === "true") {
     const listenPort = process.env.PORT || 3000;
-    app.listen(listenPort, () => {
-      console.log(`Server is listening on port ${listenPort}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    app.listen(Number(listenPort), '0.0.0.0', () => {
+  console.log(`Server is listening on port ${listenPort}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   }
 }
