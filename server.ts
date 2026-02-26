@@ -114,8 +114,8 @@ async function configureApp() {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,
-      sameSite: "none",
+      secure: false,
+      sameSite: "lax",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000
     }
