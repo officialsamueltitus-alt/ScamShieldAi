@@ -9,8 +9,10 @@ import cookieParser from "cookie-parser";
 import axios from "axios";
 import crypto from "crypto";
 
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: ".env.local" });
+  dotenv.config();
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
