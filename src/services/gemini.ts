@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" });
 
 export interface AnalysisResult {
   riskScore: number;
@@ -13,9 +13,8 @@ export interface AnalysisResult {
 }
 
 export async function analyzeInput(type: string, content: string, imageData?: string): Promise<AnalysisResult> {
-  const model = "gemini-3-flash-preview";
+ const model = "gemini-2.0-flash";
   
-  // Fetch local context first
   let localContext = "";
   try {
     const localRes = await fetch(`/api/verify/local?query=${encodeURIComponent(content.slice(0, 100))}`);
@@ -55,7 +54,7 @@ export async function analyzeInput(type: string, content: string, imageData?: st
     - recommendedAction (Avoid, Caution, or Likely Safe)
     - findings (An array of specific red flags or positive indicators)
     - ownerInfo (The name of the CEO, Founder, or likely owner. Be specific.)
-    - verifiedSources (An array of URLs or names of platforms/services you used to verify this information, e.g., ["TrueCaller", "Google Search", "SEC.gov"])
+    - verifiedSources (An array of URLs or names of platforms/services you used to verify this information)
   `;
 
   const parts: any[] = [{ text: `Perform a deep multi-source verification for this ${type} input: ${content}` }];

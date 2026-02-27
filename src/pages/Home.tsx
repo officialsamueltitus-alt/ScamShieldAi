@@ -49,7 +49,6 @@ export default function Home() {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [newsletterEmail, setNewsletterEmail] = useState("");
-  const [referralEmail, setReferralEmail] = useState("");
   const [stats, setStats] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
@@ -131,7 +130,6 @@ export default function Home() {
       const analysis = await analyzeInput(activeTab, input, selectedImage || undefined);
       setResult(analysis);
       
-      // Save to history (only if user is logged in, or we could save to local history)
       if (user) {
         await fetch("/api/reports", {
           method: "POST",
@@ -146,8 +144,9 @@ export default function Home() {
           })
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Analysis failed:", error);
+      setError("Analysis failed: " + (error?.message || "Please check your API key and try again."));
     } finally {
       setIsAnalyzing(false);
     }
@@ -159,7 +158,7 @@ export default function Home() {
       const dataUrl = await toPng(shareCardRef.current, { 
         cacheBust: true, 
         backgroundColor: '#0a0a0a',
-        pixelRatio: 3, // Increase resolution for 1080px+ clarity
+        pixelRatio: 3,
       });
       const link = document.createElement('a');
       link.download = `scamshield-analysis-${Date.now()}.png`;
@@ -188,7 +187,6 @@ export default function Home() {
           text: `I just checked a suspicious ${activeTab} on ScamShield AI. Result: ${result?.riskLevel} Risk.`,
         });
       } else {
-        // Fallback: Copy link and alert
         navigator.clipboard.writeText(`I just checked a suspicious ${activeTab} on ScamShield AI. Result: ${result?.riskLevel} Risk (${result?.riskScore}/100). Stay safe and check your links at www.scamshieldai.com!`);
         alert("Sharing not supported on this browser. Link copied to clipboard instead!");
       }
@@ -371,37 +369,11 @@ export default function Home() {
                   {/* Risk Meter */}
                   <div className="flex flex-col items-center justify-center">
                     <div className="relative w-32 h-32 md:w-48 md:h-48">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle
-                          cx="64 md:96"
-                          cy="64 md:96"
-                          r="56 md:80"
-                          fill="transparent"
-                          stroke="currentColor"
-                          strokeWidth="8 md:12"
-                          className="text-white/5"
-                        />
-                        {/* Note: SVG coordinates need to be consistent, I'll use a fixed viewBox for better scaling */}
-                      </svg>
-                      {/* Redoing the SVG for better responsiveness */}
                       <div className="absolute inset-0">
                         <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
-                          <circle
-                            cx="100"
-                            cy="100"
-                            r="80"
-                            fill="transparent"
-                            stroke="currentColor"
-                            strokeWidth="12"
-                            className="text-white/5"
-                          />
+                          <circle cx="100" cy="100" r="80" fill="transparent" stroke="currentColor" strokeWidth="12" className="text-white/5" />
                           <motion.circle
-                            cx="100"
-                            cy="100"
-                            r="80"
-                            fill="transparent"
-                            stroke="currentColor"
-                            strokeWidth="12"
+                            cx="100" cy="100" r="80" fill="transparent" stroke="currentColor" strokeWidth="12"
                             strokeDasharray={502.4}
                             initial={{ strokeDashoffset: 502.4 }}
                             animate={{ strokeDashoffset: 502.4 - (502.4 * result.riskScore) / 100 }}
@@ -434,9 +406,7 @@ export default function Home() {
                        <ShieldCheck className="text-risk-low shrink-0" />}
                       Analysis Report
                     </h3>
-                    <p className="text-gray-300 mb-6 leading-relaxed text-sm md:text-base">
-                      {result.explanation}
-                    </p>
+                    <p className="text-gray-300 mb-6 leading-relaxed text-sm md:text-base">{result.explanation}</p>
                     
                     <div className="space-y-4">
                       <div className="p-4 rounded-xl bg-white/5 border border-white/10">
@@ -463,9 +433,7 @@ export default function Home() {
 
                       <div className="pt-4 border-t border-white/5">
                         <h4 className="text-[10px] md:text-sm font-bold text-gray-500 uppercase mb-2">CEO / Founder / Owner</h4>
-                        <p className="text-sm md:text-base text-white font-medium">
-                          {result.ownerInfo || "Information not available"}
-                        </p>
+                        <p className="text-sm md:text-base text-white font-medium">{result.ownerInfo || "Information not available"}</p>
                       </div>
 
                       {result.verifiedSources && result.verifiedSources.length > 0 && (
@@ -529,16 +497,13 @@ export default function Home() {
       <div className="mt-20 md:mt-32 text-center">
         <div className="flex flex-wrap justify-center gap-6 md:gap-12 opacity-50 grayscale hover:grayscale-0 transition-all">
           <div className="flex items-center gap-2 font-bold text-base md:text-xl">
-            <Shield className="text-accent-cyan w-5 h-5 md:w-6 md:h-6" />
-            SECURE
+            <Shield className="text-accent-cyan w-5 h-5 md:w-6 md:h-6" /> SECURE
           </div>
           <div className="flex items-center gap-2 font-bold text-base md:text-xl">
-            <ShieldCheck className="text-accent-cyan w-5 h-5 md:w-6 md:h-6" />
-            VERIFIED
+            <ShieldCheck className="text-accent-cyan w-5 h-5 md:w-6 md:h-6" /> VERIFIED
           </div>
           <div className="flex items-center gap-2 font-bold text-base md:text-xl">
-            <ShieldAlert className="text-accent-cyan w-5 h-5 md:w-6 md:h-6" />
-            PROTECTED
+            <ShieldAlert className="text-accent-cyan w-5 h-5 md:w-6 md:h-6" /> PROTECTED
           </div>
         </div>
         <p className="mt-8 md:mt-12 text-gray-500 italic text-xs md:text-sm px-4">"Built for Everyday Protection. Your data is not stored without consent."</p>
@@ -579,9 +544,7 @@ export default function Home() {
         {showShareModal && result && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowShareModal(false)}
               className="absolute inset-0 bg-bg-primary/80 backdrop-blur-sm"
             />
@@ -592,8 +555,6 @@ export default function Home() {
               className="relative glass w-full max-w-md p-8 overflow-hidden"
             >
               <div ref={shareCardRef} className="p-4 bg-[#0a0a0a] rounded-xl">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-cyan to-accent-purple" />
-                
                 <div className="text-center mb-8">
                   <div className="flex items-center justify-center gap-2 mb-4">
                     <Shield className="w-8 h-8 text-accent-cyan" />
@@ -604,7 +565,7 @@ export default function Home() {
                     <div className="text-lg font-bold text-white mb-1 uppercase">
                       {input || (selectedImage ? "SCREENSHOT" : "UNKNOWN")}
                     </div>
-                    <div className="text-xs text-accent-cyan font-mono mb-4 flex flex-col gap-1">
+                    <div className="text-xs text-accent-cyan font-mono mb-4">
                       <div className="flex items-center justify-center gap-1">
                         <Building2 className="w-3 h-3" />
                         <span>Founder/CEO: {result.ownerInfo || "N/A"}</span>
@@ -616,7 +577,6 @@ export default function Home() {
                     }`}>
                       {result.riskLevel} Risk ({result.riskScore}/100)
                     </div>
-                    
                     {result.findings && result.findings.length > 0 && (
                       <div className="text-left bg-white/5 rounded-xl p-3 mb-4 border border-white/5">
                         <div className="text-[10px] text-gray-500 uppercase font-bold mb-2 tracking-wider">Key Findings:</div>
@@ -630,12 +590,8 @@ export default function Home() {
                         </ul>
                       </div>
                     )}
-
-                    <p className="text-gray-400 italic text-sm">
-                      "Don't get caught in the net. Check before you pay with ScamShield AI."
-                    </p>
+                    <p className="text-gray-400 italic text-sm">"Don't get caught in the net. Check before you pay with ScamShield AI."</p>
                   </div>
-                  
                   <div className="flex flex-col gap-2 text-xs text-gray-500 font-mono">
                     <div className="flex justify-center gap-4">
                       <span>@ScamShieldAI</span>
@@ -645,19 +601,12 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-
               <div className="flex flex-col gap-3 mt-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={handleDownloadImage}
-                    className="btn-secondary flex items-center justify-center gap-2 py-2 text-xs"
-                  >
+                  <button onClick={handleDownloadImage} className="btn-secondary flex items-center justify-center gap-2 py-2 text-xs">
                     <Download className="w-4 h-4" /> Download Image
                   </button>
-                  <button 
-                    onClick={handleShareImage}
-                    className="btn-primary flex items-center justify-center gap-2 py-2 text-xs"
-                  >
+                  <button onClick={handleShareImage} className="btn-primary flex items-center justify-center gap-2 py-2 text-xs">
                     <Share2 className="w-4 h-4" /> Share Image
                   </button>
                 </div>
@@ -670,10 +619,7 @@ export default function Home() {
                 >
                   Copy Text Link
                 </button>
-                <button 
-                  onClick={() => setShowShareModal(false)}
-                  className="btn-secondary w-full py-2 text-xs opacity-50"
-                >
+                <button onClick={() => setShowShareModal(false)} className="btn-secondary w-full py-2 text-xs opacity-50">
                   Close
                 </button>
               </div>
@@ -687,9 +633,7 @@ export default function Home() {
         {showHowItWorks && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowHowItWorks(false)}
               className="absolute inset-0 bg-bg-primary/80 backdrop-blur-sm"
             />
@@ -699,60 +643,32 @@ export default function Home() {
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative glass w-full max-w-2xl p-6 md:p-10 overflow-y-auto max-h-[90vh]"
             >
-              <button 
-                onClick={() => setShowHowItWorks(false)}
-                className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors"
-              >
+              <button onClick={() => setShowHowItWorks(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors">
                 <CloseIcon className="w-6 h-6" />
               </button>
-
               <div className="flex items-center gap-3 mb-8">
                 <div className="p-3 rounded-xl bg-accent-cyan/10 text-accent-cyan">
                   <HelpCircle className="w-8 h-8" />
                 </div>
                 <h2 className="text-2xl md:text-3xl font-bold">How It Works</h2>
               </div>
-
               <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-accent-cyan text-bg-primary flex items-center justify-center font-bold">1</div>
-                      <h3 className="font-bold text-lg">Input Data</h3>
+                  {[
+                    { num: 1, title: "Input Data", desc: "Paste a suspicious link, message, phone number, or upload a screenshot. Our system accepts various formats to ensure comprehensive coverage." },
+                    { num: 2, title: "AI Analysis", desc: "Our advanced Gemini-powered AI scans the content for emotional manipulation, urgency triggers, known scam patterns, and technical red flags." },
+                    { num: 3, title: "Risk Scoring", desc: "You receive a detailed risk score from 0 to 100, along with a clear explanation of why the input was flagged or cleared." },
+                    { num: 4, title: "Take Action", desc: "Follow our recommended actions to protect your assets. Share results with others or report new scams to our community database." }
+                  ].map(({ num, title, desc }) => (
+                    <div key={num} className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-accent-cyan text-bg-primary flex items-center justify-center font-bold">{num}</div>
+                        <h3 className="font-bold text-lg">{title}</h3>
+                      </div>
+                      <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
                     </div>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                      Paste a suspicious link, message, phone number, or upload a screenshot. Our system accepts various formats to ensure comprehensive coverage.
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-accent-cyan text-bg-primary flex items-center justify-center font-bold">2</div>
-                      <h3 className="font-bold text-lg">AI Analysis</h3>
-                    </div>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                      Our advanced Gemini-powered AI scans the content for emotional manipulation, urgency triggers, known scam patterns, and technical red flags.
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-accent-cyan text-bg-primary flex items-center justify-center font-bold">3</div>
-                      <h3 className="font-bold text-lg">Risk Scoring</h3>
-                    </div>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                      You receive a detailed risk score from 0 to 100, along with a clear explanation of why the input was flagged or cleared.
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-accent-cyan text-bg-primary flex items-center justify-center font-bold">4</div>
-                      <h3 className="font-bold text-lg">Take Action</h3>
-                    </div>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                      Follow our recommended actions to protect your assets. Share results with others or report new scams to our community database.
-                    </p>
-                  </div>
+                  ))}
                 </div>
-
                 <div className="p-6 rounded-2xl bg-accent-cyan/5 border border-accent-cyan/10">
                   <h4 className="font-bold mb-4 flex items-center gap-2">
                     <Zap className="w-5 h-5 text-accent-cyan" />
@@ -762,14 +678,8 @@ export default function Home() {
                     When using the Screenshot tool, ensure the text is clear and legible. The AI can detect fake "Verified" badges, suspicious payment UIs, and deceptive messaging patterns that text-only analysis might miss.
                   </p>
                 </div>
-
                 <div className="flex justify-center pt-4">
-                  <button 
-                    onClick={() => setShowHowItWorks(false)}
-                    className="btn-primary px-12"
-                  >
-                    Got It!
-                  </button>
+                  <button onClick={() => setShowHowItWorks(false)} className="btn-primary px-12">Got It!</button>
                 </div>
               </div>
             </motion.div>
