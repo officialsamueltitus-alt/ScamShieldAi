@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 export interface AnalysisResult {
   riskScore: number;
@@ -13,8 +13,9 @@ export interface AnalysisResult {
 }
 
 export async function analyzeInput(type: string, content: string, imageData?: string): Promise<AnalysisResult> {
-  const model = "gemini-2.0-flash";
+  const model = "gemini-3-flash-preview";
   
+  // Fetch local context first
   let localContext = "";
   try {
     const localRes = await fetch(`/api/verify/local?query=${encodeURIComponent(content.slice(0, 100))}`);
