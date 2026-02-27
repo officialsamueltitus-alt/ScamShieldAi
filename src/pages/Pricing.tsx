@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Shield, Zap, Globe, BarChart3, Bell, Download, Search, CreditCard, CheckCircle2, XCircle } from "lucide-react";
+import { Check, Shield, Zap, Globe, Download, Search, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useUser } from "../context/UserContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -26,7 +26,7 @@ const YEARLY_PLANS = [
 });
 
 export default function Pricing() {
-  const { user, addCredits, subscribePremium, refreshUser } = useUser();
+  const { user, refreshUser } = useUser();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -222,11 +222,9 @@ export default function Pricing() {
                   transition={{ delay: i * 0.05 }}
                   className="glass p-8 relative flex flex-col border-white/10 hover:border-accent-cyan/30 transition-all"
                 >
-                  {/* Save badge */}
                   <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-accent-cyan/20 text-accent-cyan text-xs font-bold border border-accent-cyan/30">
                     Save ${plan.savedAmount}
                   </div>
-
                   <div className="mb-8">
                     <h3 className="text-2xl font-bold mb-1">{plan.label}</h3>
                     <p className="text-gray-500 text-sm mb-4">{plan.creditsPerMonth} credits/month × 12 months</p>
@@ -239,7 +237,6 @@ export default function Pricing() {
                       <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs font-bold">25% OFF</span>
                     </div>
                   </div>
-
                   <div className="space-y-4 mb-12 flex-grow">
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 rounded-lg bg-accent-cyan/10 text-accent-cyan">
@@ -266,7 +263,6 @@ export default function Pricing() {
                       <span className="text-sm text-gray-300">Priority AI processing</span>
                     </div>
                   </div>
-
                   <button
                     onClick={() => handlePayment(parseFloat(plan.discountedPrice), { type: "credits", credits: plan.totalCredits })}
                     className="w-full py-4 rounded-xl font-bold bg-accent-cyan text-bg-primary hover:shadow-[0_0_20px_rgba(0,245,255,0.4)] transition-all"
@@ -286,14 +282,12 @@ export default function Pricing() {
         <p className="text-gray-400 mb-8 text-sm md:text-base">
           We offer API access and bulk analysis for businesses, exchanges, and financial institutions.
         </p>
-        
-          href="https://wa.me/2347047956284"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary w-full md:w-auto inline-block"
-        
+        <button
+          onClick={() => window.open("https://wa.me/2347047956284", "_blank")}
+          className="btn-secondary w-full md:w-auto"
+        >
           Contact Sales Team
-        </a>
+        </button>
       </div>
 
       {/* FAQ */}
