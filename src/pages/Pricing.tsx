@@ -291,7 +291,7 @@ export default function Pricing() {
           target="_blank"
           rel="noopener noreferrer"
           className="btn-secondary w-full md:w-auto inline-block"
-        >
+        
           Contact Sales Team
         </a>
       </div>
