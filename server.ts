@@ -124,12 +124,16 @@ async function configureApp() {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000
+      maxAge: 7 * 24 * 60 * 60 * 1000
     }
   }));
+
+  // =====================
+  // AUTH ROUTES
+  // =====================
 
   app.post("/api/auth/verify", async (req, res) => {
     const { email, passcode, referralCode } = req.body;
@@ -141,12 +145,14 @@ async function configureApp() {
       if (existingUser) {
         if (existingUser.passcode === passcode) {
           (req.session as any).user = existingUser;
+          await new Promise<void>((resolve) => req.session.save(() => resolve()));
           return res.json({ user: existingUser, message: "Login successful" });
         } else if (!existingUser.passcode) {
           await pool.query("UPDATE users SET passcode = $1, name = COALESCE(name, $2) WHERE email = $3", [passcode, email.split('@')[0], email]);
           const updatedResult = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
           const updatedUser = updatedResult.rows[0];
           (req.session as any).user = updatedUser;
+          await new Promise<void>((resolve) => req.session.save(() => resolve()));
           return res.json({ user: updatedUser, message: "Account setup complete" });
         } else {
           return res.status(401).json({ error: "Invalid passcode" });
@@ -166,6 +172,7 @@ async function configureApp() {
       const userResult = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
       const user = userResult.rows[0];
       (req.session as any).user = user;
+      await new Promise<void>((resolve) => req.session.save(() => resolve()));
       sendEmailNotification("New User Joined ScamShield", `New User Joined ScamShield, ${email}`);
       res.json({ user, message: "Signup successful" });
     } catch (e) {
@@ -177,8 +184,17 @@ async function configureApp() {
   app.get("/api/auth/me", async (req, res) => {
     const sessionUser = (req.session as any).user;
     if (sessionUser) {
-      const result = await pool.query("SELECT * FROM users WHERE email = $1", [sessionUser.email]);
-      res.json(result.rows[0]);
+      try {
+        const result = await pool.query("SELECT * FROM users WHERE email = $1", [sessionUser.email]);
+        if (result.rows[0]) {
+          (req.session as any).user = result.rows[0];
+          res.json(result.rows[0]);
+        } else {
+          res.status(401).json({ error: "Not authenticated" });
+        }
+      } catch (e) {
+        res.status(500).json({ error: "Failed to fetch user" });
+      }
     } else {
       res.status(401).json({ error: "Not authenticated" });
     }
@@ -186,6 +202,7 @@ async function configureApp() {
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy(() => {
+      res.clearCookie('connect.sid');
       res.json({ success: true });
     });
   });
@@ -194,7 +211,7 @@ async function configureApp() {
     const rootUrl = "https://accounts.google.com/o/oauth2/v2/auth";
     const options = {
       redirect_uri: `${process.env.APP_URL || "https://scamshieldai.onrender.com"}/api/auth/google/callback`,
-      client_id: process.env.GOOGLE_CLIENT_ID || "MOCK_CLIENT_ID",
+      client_id: process.env.GOOGLE_CLIENT_ID || "",
       access_type: "offline",
       response_type: "code",
       prompt: "consent",
@@ -230,12 +247,17 @@ async function configureApp() {
       userResult = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
       user = userResult.rows[0];
       (req.session as any).user = user;
+      await new Promise<void>((resolve) => req.session.save(() => resolve()));
       res.send(`<html><body><script>if (window.opener) { window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*'); window.close(); } else { window.location.href = '/'; }</script><p>Authentication successful.</p></body></html>`);
     } catch (error: any) {
       console.error("Google OAuth Error:", error.response?.data || error.message);
       res.status(500).send("Authentication failed");
     }
   });
+
+  // =====================
+  // USER ROUTES
+  // =====================
 
   app.post("/api/user/update-profile", async (req, res) => {
     const sessionUser = (req.session as any).user;
@@ -278,138 +300,6 @@ async function configureApp() {
     const historyResult = await pool.query("SELECT * FROM reports WHERE user_email = $1 ORDER BY created_at DESC LIMIT 20", [sessionUser.email]);
     const referralsResult = await pool.query("SELECT referred_email, created_at FROM referrals WHERE referrer_email = $1", [sessionUser.email]);
     res.json({ user: userResult.rows[0], history: historyResult.rows, referrals: referralsResult.rows });
-  });
-
-  const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "sk_test_mock_key";
-
-  app.post("/api/payments/paystack/initialize", async (req, res) => {
-    const sessionUser = (req.session as any).user;
-    if (!sessionUser) return res.status(401).json({ error: "Not authenticated" });
-    const { amount, metadata } = req.body;
-    try {
-      const response = await axios.post(
-        "https://api.paystack.co/transaction/initialize",
-        { email: sessionUser.email, amount: Math.round(amount * 100), callback_url: `${process.env.APP_URL || "https://scamshieldai.onrender.com"}/api/payments/paystack/callback`, metadata: { ...metadata, user_email: sessionUser.email } },
-        { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" } }
-      );
-      res.json(response.data.data);
-    } catch (error: any) {
-      console.error("Paystack Init Error:", error.response?.data || error.message);
-      res.status(500).json({ error: "Failed to initialize payment" });
-    }
-  });
-
-  app.get("/api/payments/paystack/callback", async (req, res) => {
-    const { reference } = req.query;
-    try {
-      const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } });
-      const data = response.data.data;
-      if (data.status === "success") {
-        const { type, credits, user_email } = data.metadata;
-        if (type === "credits") await pool.query("UPDATE users SET credits = credits + $1 WHERE email = $2", [credits, user_email]);
-        else if (type === "premium") await pool.query("UPDATE users SET is_premium = 1 WHERE email = $1", [user_email]);
-        res.redirect("/pricing?payment=success");
-      } else {
-        res.redirect("/pricing?payment=failed");
-      }
-    } catch (error) {
-      console.error("Paystack Verify Error:", error);
-      res.redirect("/pricing?payment=error");
-    }
-  });
-
-  app.post("/api/payments/paystack/webhook", async (req: any, res) => {
-    const hash = crypto.createHmac('sha512', PAYSTACK_SECRET).update(req.rawBody).digest('hex');
-    if (hash !== req.headers['x-paystack-signature']) return res.status(401).send('Invalid signature');
-    const event = req.body;
-    if (event.event === 'charge.success') {
-      const { type, credits, user_email } = event.data.metadata;
-      if (type === 'credits') await pool.query("UPDATE users SET credits = credits + $1 WHERE email = $2", [credits, user_email]);
-      else if (type === 'premium') await pool.query("UPDATE users SET is_premium = 1 WHERE email = $1", [user_email]);
-      console.log(`Webhook: Successfully processed ${type} for ${user_email}`);
-    }
-    res.status(200).send('OK');
-  });
-
-  app.get("/api/history", async (req, res) => {
-    const result = await pool.query("SELECT * FROM reports ORDER BY created_at DESC LIMIT 50");
-    res.json(result.rows);
-  });
-
-  app.post("/api/reports", async (req, res) => {
-    const sessionUser = (req.session as any).user;
-    const { type, content, risk_score, risk_level, explanation, owner_info } = req.body;
-    if (!sessionUser) await pool.query("UPDATE counters SET count = count + 1 WHERE id = 'guest_users'");
-    const result = await pool.query(
-      "INSERT INTO reports (user_email, type, content, risk_score, risk_level, explanation, owner_info) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-      [sessionUser?.email || null, type, content, risk_score, risk_level, explanation, owner_info]
-    );
-    res.json({ id: result.rows[0].id });
-  });
-
-  app.get("/api/community-reports", async (req, res) => {
-    const result = await pool.query("SELECT * FROM community_reports ORDER BY created_at DESC");
-    res.json(result.rows);
-  });
-
-  app.post("/api/community-reports", async (req, res) => {
-    const { title, description, scam_type, evidence_url } = req.body;
-    const result = await pool.query("INSERT INTO community_reports (title, description, scam_type, evidence_url) VALUES ($1, $2, $3, $4) RETURNING id", [title, description, scam_type, evidence_url]);
-    res.json({ id: result.rows[0].id });
-  });
-
-  app.get("/api/verify/local", async (req, res) => {
-    const { query } = req.query;
-    if (!query) return res.json([]);
-    const searchStr = `%${query}%`;
-    try {
-      const result = await pool.query(`
-        SELECT title as name, description as details, scam_type as type, created_at FROM community_reports WHERE title ILIKE $1 OR description ILIKE $2
-        UNION
-        SELECT 'Previous Analysis' as name, explanation as details, type as type, created_at FROM reports WHERE content ILIKE $3 OR explanation ILIKE $4
-        LIMIT 5
-      `, [searchStr, searchStr, searchStr, searchStr]);
-      res.json(result.rows);
-    } catch (e) {
-      console.error("Local verify error:", e);
-      res.json([]);
-    }
-  });
-
-  app.get("/api/stats", async (req, res) => {
-    const totalChecks = await pool.query("SELECT COUNT(*) as count FROM reports");
-    const highRisk = await pool.query("SELECT COUNT(*) as count FROM reports WHERE risk_level = 'High'");
-    const avgRisk = await pool.query("SELECT AVG(risk_score) as avg FROM reports");
-    const registeredUsers = await pool.query("SELECT COUNT(*) as count FROM users");
-    const guestUsers = await pool.query("SELECT count FROM counters WHERE id = 'guest_users'");
-    res.json({
-      totalChecks: parseInt(totalChecks.rows[0].count),
-      highRiskDetected: parseInt(highRisk.rows[0].count),
-      averageRiskScore: Math.round(avgRisk.rows[0].avg || 0),
-      registeredUsers: parseInt(registeredUsers.rows[0].count),
-      guestUsers: guestUsers.rows[0]?.count || 0
-    });
-  });
-
-  app.post("/api/user/init", async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email required" });
-    let result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-    let user = result.rows[0];
-    if (!user) {
-      const referralCode = await generateReferralCode();
-      await pool.query("INSERT INTO users (email, referral_code) VALUES ($1, $2)", [email, referralCode]);
-      result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-      user = result.rows[0];
-    }
-    res.json(user);
-  });
-
-  app.get("/api/user/me", async (req, res) => {
-    const email = req.query.email as string;
-    if (!email) return res.status(400).json({ error: "Email required" });
-    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-    res.json(result.rows[0] || { error: "User not found" });
   });
 
   app.post("/api/user/newsletter", async (req, res) => {
@@ -464,6 +354,172 @@ async function configureApp() {
       res.json({ success: false, message: "No searches remaining" });
     }
   });
+
+  app.post("/api/user/init", async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email required" });
+    let result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    let user = result.rows[0];
+    if (!user) {
+      const referralCode = await generateReferralCode();
+      await pool.query("INSERT INTO users (email, referral_code) VALUES ($1, $2)", [email, referralCode]);
+      result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+      user = result.rows[0];
+    }
+    res.json(user);
+  });
+
+  app.get("/api/user/me", async (req, res) => {
+    const email = req.query.email as string;
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    res.json(result.rows[0] || { error: "User not found" });
+  });
+
+  // =====================
+  // PAYMENT ROUTES
+  // =====================
+
+  const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "";
+  const APP_URL = process.env.APP_URL || "https://scamshieldai.onrender.com";
+
+  app.post("/api/payments/paystack/initialize", async (req, res) => {
+    const sessionUser = (req.session as any).user;
+    if (!sessionUser) return res.status(401).json({ error: "Not authenticated" });
+    const { amount, metadata } = req.body;
+    try {
+      const response = await axios.post(
+        "https://api.paystack.co/transaction/initialize",
+        {
+          email: sessionUser.email,
+          amount: Math.round(amount * 100),
+          callback_url: `${APP_URL}/api/payments/paystack/callback`,
+          metadata: { ...metadata, user_email: sessionUser.email }
+        },
+        { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" } }
+      );
+      res.json(response.data.data);
+    } catch (error: any) {
+      console.error("Paystack Init Error:", error.response?.data || error.message);
+      res.status(500).json({ error: "Failed to initialize payment" });
+    }
+  });
+
+  app.get("/api/payments/paystack/callback", async (req, res) => {
+    const { reference } = req.query;
+    try {
+      const response = await axios.get(
+        `https://api.paystack.co/transaction/verify/${reference}`,
+        { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } }
+      );
+      const data = response.data.data;
+      if (data.status === "success") {
+        const { type, credits, user_email } = data.metadata;
+        if (type === "credits") {
+          await pool.query("UPDATE users SET credits = credits + $1 WHERE email = $2", [credits, user_email]);
+        } else if (type === "premium") {
+          await pool.query("UPDATE users SET is_premium = 1 WHERE email = $1", [user_email]);
+        }
+        res.redirect("/pricing?payment=success");
+      } else {
+        res.redirect("/pricing?payment=failed");
+      }
+    } catch (error) {
+      console.error("Paystack Verify Error:", error);
+      res.redirect("/pricing?payment=error");
+    }
+  });
+
+  app.post("/api/payments/paystack/webhook", async (req: any, res) => {
+    const hash = crypto.createHmac('sha512', PAYSTACK_SECRET).update(req.rawBody).digest('hex');
+    if (hash !== req.headers['x-paystack-signature']) return res.status(401).send('Invalid signature');
+    const event = req.body;
+    if (event.event === 'charge.success') {
+      const { type, credits, user_email } = event.data.metadata;
+      if (type === 'credits') {
+        await pool.query("UPDATE users SET credits = credits + $1 WHERE email = $2", [credits, user_email]);
+      } else if (type === 'premium') {
+        await pool.query("UPDATE users SET is_premium = 1 WHERE email = $1", [user_email]);
+      }
+      console.log(`Webhook: Successfully processed ${type} for ${user_email}`);
+    }
+    res.status(200).send('OK');
+  });
+
+  // =====================
+  // REPORTS & STATS
+  // =====================
+
+  app.get("/api/history", async (req, res) => {
+    const result = await pool.query("SELECT * FROM reports ORDER BY created_at DESC LIMIT 50");
+    res.json(result.rows);
+  });
+
+  app.post("/api/reports", async (req, res) => {
+    const sessionUser = (req.session as any).user;
+    const { type, content, risk_score, risk_level, explanation, owner_info } = req.body;
+    if (!sessionUser) await pool.query("UPDATE counters SET count = count + 1 WHERE id = 'guest_users'");
+    const result = await pool.query(
+      "INSERT INTO reports (user_email, type, content, risk_score, risk_level, explanation, owner_info) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+      [sessionUser?.email || null, type, content, risk_score, risk_level, explanation, owner_info]
+    );
+    res.json({ id: result.rows[0].id });
+  });
+
+  app.get("/api/community-reports", async (req, res) => {
+    const result = await pool.query("SELECT * FROM community_reports ORDER BY created_at DESC");
+    res.json(result.rows);
+  });
+
+  app.post("/api/community-reports", async (req, res) => {
+    const { title, description, scam_type, evidence_url } = req.body;
+    const result = await pool.query(
+      "INSERT INTO community_reports (title, description, scam_type, evidence_url) VALUES ($1, $2, $3, $4) RETURNING id",
+      [title, description, scam_type, evidence_url]
+    );
+    res.json({ id: result.rows[0].id });
+  });
+
+  app.get("/api/verify/local", async (req, res) => {
+    const { query } = req.query;
+    if (!query) return res.json([]);
+    const searchStr = `%${query}%`;
+    try {
+      const result = await pool.query(`
+        SELECT title as name, description as details, scam_type as type, created_at FROM community_reports WHERE title ILIKE $1 OR description ILIKE $2
+        UNION
+        SELECT 'Previous Analysis' as name, explanation as details, type as type, created_at FROM reports WHERE content ILIKE $3 OR explanation ILIKE $4
+        LIMIT 5
+      `, [searchStr, searchStr, searchStr, searchStr]);
+      res.json(result.rows);
+    } catch (e) {
+      console.error("Local verify error:", e);
+      res.json([]);
+    }
+  });
+
+  app.get("/api/stats", async (req, res) => {
+    try {
+      const totalChecks = await pool.query("SELECT COUNT(*) as count FROM reports");
+      const highRisk = await pool.query("SELECT COUNT(*) as count FROM reports WHERE risk_level = 'High'");
+      const avgRisk = await pool.query("SELECT AVG(risk_score) as avg FROM reports");
+      const registeredUsers = await pool.query("SELECT COUNT(*) as count FROM users");
+      const guestUsers = await pool.query("SELECT count FROM counters WHERE id = 'guest_users'");
+      res.json({
+        totalChecks: parseInt(totalChecks.rows[0].count),
+        highRiskDetected: parseInt(highRisk.rows[0].count),
+        averageRiskScore: Math.round(avgRisk.rows[0].avg || 0),
+        registeredUsers: parseInt(registeredUsers.rows[0].count),
+        guestUsers: guestUsers.rows[0]?.count || 0
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  // =====================
+  // FRONTEND
+  // =====================
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
